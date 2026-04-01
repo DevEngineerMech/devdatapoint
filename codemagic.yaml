@@ -9,7 +9,7 @@ workflows:
       cocoapods: default
 
       vars:
-        BUNDLE_ID: "com.devengineermech.devdatapoint"
+        BUNDLE_ID: "app.rork.k1oi3mhgah0fgszldnbv8"
 
     scripts:
       - name: Get Flutter packages
@@ -35,7 +35,3 @@ workflows:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - flutter_drive.log
-
-    publishing:
-      app_store_connect:
-        auth: integration
