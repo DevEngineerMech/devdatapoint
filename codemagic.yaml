@@ -12,6 +12,9 @@ workflows:
         distribution_type: app_store
         bundle_identifier: app.rork.k1oi3mhgah0fgszldnbv8
 
+    integrations:
+      app_store_connect: Codemagic
+
     scripts:
       - name: Get Flutter packages
         script: |
@@ -23,11 +26,11 @@ workflows:
           pod install
           cd ..
 
-      - name: Set up code signing
+      - name: Set Xcode code signing
         script: |
           xcode-project use-profiles
 
-      - name: Build iOS archive
+      - name: Build IPA
         script: |
           xcode-project build-ipa \
             --workspace ios/Runner.xcworkspace \
@@ -36,4 +39,3 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-      - flutter_drive.log
