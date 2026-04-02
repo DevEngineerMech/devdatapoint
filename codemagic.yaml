@@ -42,4 +42,4 @@ workflows:
 
     publishing:
       app_store_connect:
-        api_key: Encrypted(...)
+        api_key: Encrypted(5GX7VZ2JVN)
