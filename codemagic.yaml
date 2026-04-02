@@ -6,36 +6,21 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
-      cocoapods: default
 
       ios_signing:
         distribution_type: app_store
         bundle_identifier: app.rork.k1oi3mhgah0fgszldnbv8
 
-      vars:
-        BUNDLE_ID: "app.rork.k1oi3mhgah0fgszldnbv8"
-
     scripts:
       - name: Get Flutter packages
-        script: |
-          flutter pub get
+        script: flutter pub get
 
-      - name: Install CocoaPods
-        script: |
-          cd ios
-          pod install
-          cd ..
-
-      - name: Set iOS bundle ID cleanly
-        script: |
-          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" ios/Runner/Info.plist || \
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $BUNDLE_ID" ios/Runner/Info.plist
-
-      - name: Build iOS IPA
-        script: |
-          flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+      - name: Build iOS (no codesign)
+        script: flutter build ios --release --no-codesign
 
     artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-      - flutter_drive.log
+      - build/ios/iphoneos/*.app
+
+    publishing:
+      app_store_connect:
+        api_key: Encrypted(5GX7VZ2JVN)
