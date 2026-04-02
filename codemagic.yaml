@@ -1,24 +1,17 @@
 workflows:
   ios-release:
     name: iOS Release
-    max_build_duration: 120
-
     environment:
       flutter: stable
       xcode: latest
       cocoapods: default
-
       ios_signing:
         distribution_type: app_store
         bundle_identifier: app.rork.k1oi3mhgah0fgszldnbv8
 
-    integrations:
-      app_store_connect: Codemagic
-
     scripts:
       - name: Get Flutter packages
-        script: |
-          flutter pub get
+        script: flutter pub get
 
       - name: Install CocoaPods
         script: |
@@ -26,9 +19,8 @@ workflows:
           pod install
           cd ..
 
-      - name: Set Xcode code signing
-        script: |
-          xcode-project use-profiles
+      - name: Apply provisioning profiles
+        script: xcode-project use-profiles
 
       - name: Build IPA
         script: |
