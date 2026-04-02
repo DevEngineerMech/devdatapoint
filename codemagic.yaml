@@ -20,7 +20,3 @@ workflows:
 
     artifacts:
       - build/ios/iphoneos/*.app
-
-    publishing:
-      app_store_connect:
-        api_key: Encrypted(5GX7VZ2JVN)
