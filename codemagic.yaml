@@ -1,6 +1,7 @@
 workflows:
   ios-workflow:
     name: iOS Workflow
+    max_build_duration: 60
 
     integrations:
       app_store_connect: Codemagic
@@ -14,14 +15,26 @@ workflows:
         bundle_identifier: app.rork.k1oi3mhgah0fgszldnbv8
 
     scripts:
-      - name: Get packages
-        script: flutter pub get
+      - name: Flutter clean + get
+        script: |
+          flutter clean
+          flutter pub get
 
-      - name: Build IPA
-        script: flutter build ipa --release
+      - name: Install CocoaPods
+        script: |
+          cd ios
+          pod repo update
+          pod install
+          cd ..
+
+      - name: Build App Store IPA
+        script: |
+          flutter build ipa --release --export-method app-store
 
     artifacts:
       - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
 
     publishing:
       app_store_connect:
