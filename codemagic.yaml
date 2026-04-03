@@ -27,9 +27,24 @@ workflows:
           pod install
           cd ..
 
-      - name: Build App Store IPA
+      - name: Build iOS without signing
         script: |
-          flutter build ipa --release --export-method app-store
+          flutter build ios --release --no-codesign
+
+      - name: Archive signed IPA with Xcode
+        script: |
+          xcode-project use-profiles
+
+          xcodebuild -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath build/Runner.xcarchive \
+            archive
+
+          xcodebuild -exportArchive \
+            -archivePath build/Runner.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist /Users/builder/export_options.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
