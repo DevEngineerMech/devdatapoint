@@ -35,7 +35,9 @@ workflows:
 
     publishing:
       app_store_connect:
-        auth: integration
+        api_key: Encrypted(5GX7VZ2JVN)
+        key_id: 5GX7VZ2JVN
+        issuer_id: 838d4d9b-257b-48a3-b564-6df682f00638
         submit_to_testflight: true
         beta_groups:
           - Internal Testers
