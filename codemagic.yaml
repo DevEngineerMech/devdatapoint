@@ -3,6 +3,9 @@ workflows:
     name: iOS Workflow
     max_build_duration: 60
 
+    integrations:
+      app_store_connect: Codemagic
+
     environment:
       flutter: stable
       xcode: latest
@@ -35,9 +38,7 @@ workflows:
 
     publishing:
       app_store_connect:
-        api_key: Encrypted(5GX7VZ2JVN)
-        key_id: 5GX7VZ2JVN
-        issuer_id: 838d4d9b-257b-48a3-b564-6df682f00638
+        auth: integration
         submit_to_testflight: true
         beta_groups:
           - Internal Testers
