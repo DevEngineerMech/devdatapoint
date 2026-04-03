@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:devdatapoint/core/services/api_connection_service.dart';
@@ -15,6 +18,7 @@ class _LinkApiPageState extends State<LinkApiPage> {
   bool isSaving = false;
   bool isProUser = false;
   int appLimit = 1;
+  String? pickedP8FileName;
 
   final issuerIdController = TextEditingController();
   final keyIdController = TextEditingController();
@@ -70,34 +74,69 @@ class _LinkApiPageState extends State<LinkApiPage> {
     super.dispose();
   }
 
+  Future<void> _pickP8File() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['p8', 'txt'],
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      final Uint8List? bytes = file.bytes;
+
+      if (bytes == null) {
+        _showSnack('Could not read selected file.');
+        return;
+      }
+
+      final text = String.fromCharCodes(bytes).trim();
+
+      if (text.isEmpty) {
+        _showSnack('Selected file was empty.');
+        return;
+      }
+
+      privateKeyController.text = text;
+      pickedP8FileName = file.name;
+
+      if (mounted) setState(() {});
+    } catch (e) {
+      _showSnack('File picker failed: $e');
+    }
+  }
+
   void _addApp() {
     final name = appNameController.text.trim();
+    final iconUrl = appIconUrlController.text.trim();
+    final appStoreId = appStoreIdController.text.trim();
+    final bundleId = bundleIdController.text.trim();
 
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('App name is required.')),
+    if (apps.length >= appLimit) {
+      _showSnack(
+        isProUser
+            ? 'You can only add up to 5 apps on Pro.'
+            : 'Free users can only add 1 app. Upgrade to Pro to add up to 5.',
       );
       return;
     }
 
-    if (apps.length >= appLimit) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isProUser
-                ? 'You can only add up to 5 apps on Pro.'
-                : 'Free users can only add 1 app. Upgrade to Pro to add up to 5.',
-          ),
-        ),
+    if (name.isEmpty && bundleId.isEmpty && appStoreId.isEmpty) {
+      _showSnack(
+        'Add at least an app name, bundle ID, or App Store ID.',
       );
       return;
     }
 
     apps.add({
-      'name': name,
-      'iconUrl': appIconUrlController.text.trim(),
-      'appStoreId': appStoreIdController.text.trim(),
-      'bundleId': bundleIdController.text.trim(),
+      'name': name.isEmpty
+          ? (bundleId.isNotEmpty ? bundleId : 'Untitled App')
+          : name,
+      'iconUrl': iconUrl,
+      'appStoreId': appStoreId,
+      'bundleId': bundleId,
       'downloads': '0',
       'impressions': '0',
       'avgPlayTime': '0',
@@ -118,18 +157,7 @@ class _LinkApiPageState extends State<LinkApiPage> {
     final privateKey = privateKeyController.text.trim();
 
     if (issuerId.isEmpty || keyId.isEmpty || privateKey.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Issuer ID, Key ID and private key are required.'),
-        ),
-      );
-      return;
-    }
-
-    if (apps.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one app before saving.')),
-      );
+      _showSnack('Issuer ID, Key ID and private key are required.');
       return;
     }
 
@@ -145,15 +173,20 @@ class _LinkApiPageState extends State<LinkApiPage> {
 
       await ApiConnectionService.saveApps(apps);
 
-      // IMPORTANT: trigger real backend sync immediately
-      await ApiConnectionService.syncNow();
+      if (apps.isNotEmpty) {
+        try {
+          await ApiConnectionService.syncNow();
+        } catch (_) {}
+      }
 
       if (!mounted) return;
 
       setState(() => isSaving = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('API linked and sync started.')),
+      _showSnack(
+        apps.isEmpty
+            ? 'API saved. You can add apps later.'
+            : 'API linked and apps saved.',
       );
 
       Navigator.pop(context, true);
@@ -161,11 +194,14 @@ class _LinkApiPageState extends State<LinkApiPage> {
       if (!mounted) return;
 
       setState(() => isSaving = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e')),
-      );
+      _showSnack('Save failed: $e');
     }
+  }
+
+  void _showSnack(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
+    );
   }
 
   void _nextStep() {
@@ -295,7 +331,7 @@ class _LinkApiPageState extends State<LinkApiPage> {
                 isSaving
                     ? 'Saving...'
                     : isLast
-                        ? 'Save API'
+                        ? 'Save & Continue'
                         : 'Next',
                 style: const TextStyle(fontWeight: FontWeight.w900),
               ),
@@ -414,9 +450,7 @@ class _LinkApiPageState extends State<LinkApiPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _infoBullet(
-            'This lets DevDatapoint know which Apple account to read from.',
-          ),
+          _infoBullet('This tells DevDatapoint which Apple account to read from.'),
           _infoBullet('You only need to set this up once.'),
           _infoBullet('You can edit it later if you change keys.'),
           const SizedBox(height: 8),
@@ -438,9 +472,7 @@ class _LinkApiPageState extends State<LinkApiPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _infoBullet('This identifies the exact API key you generated.'),
-          _infoBullet(
-            'Use the same key that belongs to your App Store Connect account.',
-          ),
+          _infoBullet('Use the same key that belongs to your App Store Connect account.'),
           _infoBullet('You can revoke and replace it later if needed.'),
           const SizedBox(height: 8),
           _darkField(
@@ -461,9 +493,7 @@ class _LinkApiPageState extends State<LinkApiPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _infoBullet('Useful for some Apple reporting setups.'),
-          _infoBullet(
-            'Safe to skip for now if you just want to get started.',
-          ),
+          _infoBullet('Safe to skip for now if you just want to get started.'),
           _infoBullet('You can come back and add it later.'),
           const SizedBox(height: 8),
           _darkField(
@@ -479,18 +509,38 @@ class _LinkApiPageState extends State<LinkApiPage> {
     return _stepCard(
       title: 'Step 4 — Private Key (.p8)',
       subtitle:
-          'Paste the full contents of your downloaded .p8 file below. This avoids file picker issues and works cleanly on web and iPhone.',
+          'Upload your .p8 file or paste it manually. Both work.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _infoBullet(
-            'Open the .p8 file in a text editor and copy everything inside it.',
+          _infoBullet('Tap the upload button to pick your downloaded .p8 file.'),
+          _infoBullet('Or paste the full key manually if you prefer.'),
+          _infoBullet('Keep the BEGIN and END lines included.'),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _pickP8File,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+                side: BorderSide(color: AppTheme.border),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              icon: const Icon(Icons.upload_file_rounded, color: AppTheme.textPrimary),
+              label: Text(
+                pickedP8FileName == null
+                    ? 'Choose .p8 File'
+                    : 'Loaded: $pickedP8FileName',
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
           ),
-          _infoBullet(
-            'Paste the full key exactly as it appears, including BEGIN and END lines.',
-          ),
-          _infoBullet('This now uploads to your backend for syncing.'),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           _darkField(
             controller: privateKeyController,
             hint: 'Paste full .p8 private key here',
@@ -503,15 +553,15 @@ class _LinkApiPageState extends State<LinkApiPage> {
 
   Widget _stepApps() {
     return _stepCard(
-      title: 'Step 5 — Add Your Apps',
+      title: 'Step 5 — Add Your Apps (Optional)',
       subtitle:
-          'Add the apps you want shown inside DevDatapoint. This powers your Apps page immediately.',
+          'You can add apps now or skip this and do it later from the Apps page.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _infoBullet('Free users can add 1 app. Pro users can add up to 5 apps.'),
-          _infoBullet('Logo URL is optional for now.'),
-          _infoBullet('You can edit or re-add apps later.'),
+          _infoBullet('Bundle ID is usually the most useful field to add.'),
+          _infoBullet('App name and logo are optional.'),
           const SizedBox(height: 12),
           Container(
             width: double.infinity,
@@ -534,7 +584,7 @@ class _LinkApiPageState extends State<LinkApiPage> {
           const SizedBox(height: 16),
           _darkField(
             controller: appNameController,
-            hint: 'App name',
+            hint: 'App name (optional)',
           ),
           const SizedBox(height: 12),
           _darkField(
@@ -544,12 +594,12 @@ class _LinkApiPageState extends State<LinkApiPage> {
           const SizedBox(height: 12),
           _darkField(
             controller: appStoreIdController,
-            hint: 'App Store ID (optional)',
+            hint: 'App Store ID (required)',
           ),
           const SizedBox(height: 12),
           _darkField(
             controller: bundleIdController,
-            hint: 'Bundle ID (optional)',
+            hint: 'Bundle ID (required)',
           ),
           const SizedBox(height: 14),
           SizedBox(
@@ -577,7 +627,7 @@ class _LinkApiPageState extends State<LinkApiPage> {
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'No apps added yet.',
+                'No apps added yet. That’s okay — you can save and continue later.',
                 style: TextStyle(color: AppTheme.textMuted),
               ),
             )

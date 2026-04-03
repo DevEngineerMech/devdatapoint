@@ -20,7 +20,9 @@ class IAPService {
   static final InAppPurchase _iap = InAppPurchase.instance;
 
   static bool _initialized = false;
+  static bool _initializing = false;
   static bool _storeAvailable = false;
+  static bool _productsLoaded = false;
 
   static StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
   static List<ProductDetails> _cachedProducts = [];
@@ -31,10 +33,13 @@ class IAPService {
   static bool get isSupportedPlatform => !kIsWeb && Platform.isIOS;
 
   static Future<void> ensureInitialized() async {
-    if (_initialized) return;
+    if (_initialized || _initializing) return;
+
+    _initializing = true;
 
     if (!isSupportedPlatform) {
       _initialized = true;
+      _initializing = false;
       _storeAvailable = false;
       return;
     }
@@ -57,7 +62,7 @@ class IAPService {
           },
         );
 
-        await loadProducts();
+        await _loadProductsInternal();
       }
     } catch (e) {
       debugPrint('IAP init failed: $e');
@@ -65,6 +70,7 @@ class IAPService {
     }
 
     _initialized = true;
+    _initializing = false;
   }
 
   static Future<bool> isStoreAvailable() async {
@@ -72,7 +78,7 @@ class IAPService {
     return _storeAvailable;
   }
 
-  static Future<List<ProductDetails>> loadProducts() async {
+  static Future<List<ProductDetails>> loadProducts({bool force = false}) async {
     await ensureInitialized();
 
     if (!_storeAvailable) {
@@ -80,16 +86,38 @@ class IAPService {
       return _cachedProducts;
     }
 
-    final response = await _iap.queryProductDetails(_productIds);
+    if (_productsLoaded && !force) {
+      return _cachedProducts;
+    }
 
-    if (response.error != null) {
-      debugPrint('IAP query error: ${response.error}');
+    return _loadProductsInternal();
+  }
+
+  static Future<List<ProductDetails>> _loadProductsInternal() async {
+    if (!_storeAvailable) {
       _cachedProducts = [];
       return _cachedProducts;
     }
 
-    _cachedProducts = response.productDetails;
-    return _cachedProducts;
+    try {
+      final response = await _iap
+          .queryProductDetails(_productIds)
+          .timeout(const Duration(seconds: 12));
+
+      if (response.error != null) {
+        debugPrint('IAP query error: ${response.error}');
+        _cachedProducts = [];
+        return _cachedProducts;
+      }
+
+      _cachedProducts = response.productDetails;
+      _productsLoaded = true;
+      return _cachedProducts;
+    } catch (e) {
+      debugPrint('IAP load products failed: $e');
+      _cachedProducts = [];
+      return _cachedProducts;
+    }
   }
 
   static List<ProductDetails> getCachedProducts() => _cachedProducts;
@@ -112,7 +140,7 @@ class IAPService {
     }
 
     if (_cachedProducts.isEmpty) {
-      await loadProducts();
+      await loadProducts(force: true);
     }
 
     final product = getProductById(productId);
@@ -123,13 +151,9 @@ class IAPService {
     _purchaseCompleter = Completer<bool>();
     final purchaseParam = PurchaseParam(productDetails: product);
 
-    if (productId == lifetimeProductId) {
-      await _iap.buyNonConsumable(purchaseParam: purchaseParam);
-    } else {
-      await _iap.buyNonConsumable(
-        purchaseParam: purchaseParam,
-      );
-    }
+    await _iap.buyNonConsumable(
+      purchaseParam: purchaseParam,
+    );
 
     return _purchaseCompleter!.future.timeout(
       const Duration(minutes: 2),
@@ -153,7 +177,7 @@ class IAPService {
     await _iap.restorePurchases();
 
     return _restoreCompleter!.future.timeout(
-      const Duration(seconds: 15),
+      const Duration(seconds: 20),
       onTimeout: () {
         _restoreCompleter = null;
         return false;
@@ -246,5 +270,8 @@ class IAPService {
     await _purchaseSubscription?.cancel();
     _purchaseSubscription = null;
     _initialized = false;
+    _initializing = false;
+    _productsLoaded = false;
+    _cachedProducts = [];
   }
 }

@@ -1,3 +1,4 @@
+/// <reference lib="deno.ns" />
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -5,6 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 type AppRow = {
@@ -137,13 +139,6 @@ async function fetchAppMetadata(jwt: string, appStoreId: string) {
   return await res.json();
 }
 
-/**
- * IMPORTANT:
- * Apple analytics APIs are fragmented and awkward.
- *
- * This function attempts to pull the best available values from App Store Connect.
- * If some metrics are unavailable for a specific app/account, it gracefully falls back.
- */
 async function fetchAppAnalytics(
   jwt: string,
   appStoreId: string,
@@ -163,11 +158,8 @@ async function fetchAppAnalytics(
   let avgPlayTime = previous.avg_play_time ?? 0;
   let conversionRate = previous.conversion_rate ?? 0;
 
-  // 1) Validate app exists
   await fetchAppMetadata(jwt, appStoreId);
 
-  // 2) Try Analytics Reports endpoint
-  // NOTE: Apple may return different structures depending on account/app access.
   try {
     const analyticsRes = await fetch(
       `https://api.appstoreconnect.apple.com/v1/apps/${appStoreId}/analyticsReportRequests`,
@@ -175,20 +167,10 @@ async function fetchAppAnalytics(
     );
 
     if (analyticsRes.ok) {
-      const analyticsJson = await analyticsRes.json();
-      const reports = analyticsJson?.data ?? [];
-
-      if (Array.isArray(reports) && reports.length > 0) {
-        // You can extend this later to fetch real report instances/files.
-        // For now this confirms analytics access is available.
-      }
+      await analyticsRes.json();
     }
-  } catch (_) {
-    // Silent fallback
-  }
+  } catch (_) {}
 
-  // 3) Try App Store Performance endpoint (best effort)
-  // NOTE: Apple often restricts or changes this shape.
   try {
     const perfRes = await fetch(
       `https://api.appstoreconnect.apple.com/v1/apps/${appStoreId}/appStoreVersions`,
@@ -197,27 +179,8 @@ async function fetchAppAnalytics(
 
     if (perfRes.ok) {
       await perfRes.json();
-      // This confirms app performance-related resources are accessible.
     }
-  } catch (_) {
-    // Silent fallback
-  }
-
-  /**
-   * PRACTICAL NOTE:
-   * Apple does NOT expose a single neat “dashboard totals” endpoint like you'd expect.
-   *
-   * So for now:
-   * - we preserve previous totals if Apple doesn't return clean metric rows
-   * - your architecture is fully ready
-   * - once TestFlight confirms the app/account link, we can tune exact metric extraction
-   *
-   * This means:
-   * ✅ backend works
-   * ✅ notifications work
-   * ✅ totals persist
-   * ✅ real app validation works
-   */
+  } catch (_) {}
 
   if (impressions > 0) {
     conversionRate = (downloads / impressions) * 100;
@@ -259,19 +222,33 @@ async function sendPush(token: string, title: string, body: string) {
   }
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      {
+        status: 405,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
+  }
 
-    const body = await req.json();
-    const userId = body.user_id as string;
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error("Missing Supabase environment variables.");
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    const body = await req.json().catch(() => ({}));
+    const userId = body.user_id as string | undefined;
     const force = body.force === true;
 
     if (!userId) {
@@ -348,6 +325,10 @@ serve(async (req) => {
     }> = [];
 
     for (const app of apps) {
+      if (!app.app_store_id || app.app_store_id.trim().isEmpty) {
+        continue;
+      }
+
       const latest = await fetchAppAnalytics(jwt, app.app_store_id, app);
 
       const previousDownloads = app.downloads ?? 0;

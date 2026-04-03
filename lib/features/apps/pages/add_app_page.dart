@@ -52,10 +52,15 @@ class _AddAppPageState extends State<AddAppPage> {
 
   Future<void> _saveApp() async {
     final name = nameController.text.trim();
+    final iconUrl = iconUrlController.text.trim();
+    final appStoreId = appStoreIdController.text.trim();
+    final bundleId = bundleIdController.text.trim();
 
-    if (name.isEmpty) {
+    if (name.isEmpty && appStoreId.isEmpty && bundleId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('App name is required')),
+        const SnackBar(
+          content: Text('Add at least an app name, App Store ID, or Bundle ID'),
+        ),
       );
       return;
     }
@@ -78,12 +83,12 @@ class _AddAppPageState extends State<AddAppPage> {
     final existing = await ApiConnectionService.getSavedApps();
 
     existing.add({
-      'name': name,
-      'iconUrl': iconUrlController.text.trim(),
-      'appStoreId': appStoreIdController.text.trim(),
-      'bundleId': bundleIdController.text.trim(),
-
-      // ready for real sync later
+      'name': name.isEmpty
+          ? (bundleId.isNotEmpty ? bundleId : 'Untitled App')
+          : name,
+      'iconUrl': iconUrl,
+      'appStoreId': appStoreId,
+      'bundleId': bundleId,
       'downloads': '0',
       'impressions': '0',
       'avgPlayTime': '0',
@@ -136,13 +141,13 @@ class _AddAppPageState extends State<AddAppPage> {
               ),
             ),
             const SizedBox(height: 16),
-            _field(nameController, 'App name'),
+            _field(nameController, 'App name (optional)'),
             const SizedBox(height: 14),
             _field(iconUrlController, 'Logo URL (optional)'),
             const SizedBox(height: 14),
             _field(appStoreIdController, 'App Store ID (optional)'),
             const SizedBox(height: 14),
-            _field(bundleIdController, 'Bundle ID (optional)'),
+            _field(bundleIdController, 'Bundle ID (recommended)'),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: (isSaving || atLimit) ? null : _saveApp,

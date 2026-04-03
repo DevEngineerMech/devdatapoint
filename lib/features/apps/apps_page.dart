@@ -15,11 +15,15 @@ class AppsPage extends StatefulWidget {
   State<AppsPage> createState() => _AppsPageState();
 }
 
-class _AppsPageState extends State<AppsPage> {
+class _AppsPageState extends State<AppsPage>
+    with AutomaticKeepAliveClientMixin {
   bool isLoading = true;
   bool isGridView = true;
   bool apiLinked = false;
   List<Map<String, String>> apps = [];
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -27,7 +31,7 @@ class _AppsPageState extends State<AppsPage> {
     _loadApps(syncFirst: true);
   }
 
-  Future<void> _loadApps({bool syncFirst = false}) async {
+  Future<void> _loadApps({bool syncFirst = false, bool forceRefresh = false}) async {
     final connection = await ApiConnectionService.getConnection();
 
     final issuerId = (connection['issuerId'] ?? '').trim();
@@ -43,7 +47,8 @@ class _AppsPageState extends State<AppsPage> {
       } catch (_) {}
     }
 
-    final savedApps = await ApiConnectionService.getSavedApps();
+    final savedApps =
+        await ApiConnectionService.getSavedApps(forceRefresh: forceRefresh);
 
     if (!mounted) return;
 
@@ -63,7 +68,7 @@ class _AppsPageState extends State<AppsPage> {
     );
 
     if (result == true) {
-      await _loadApps(syncFirst: true);
+      await _loadApps(syncFirst: true, forceRefresh: true);
     }
   }
 
@@ -76,7 +81,7 @@ class _AppsPageState extends State<AppsPage> {
     );
 
     if (result == true) {
-      await _loadApps(syncFirst: true);
+      await _loadApps(syncFirst: true, forceRefresh: true);
     }
   }
 
@@ -91,6 +96,8 @@ class _AppsPageState extends State<AppsPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -102,15 +109,16 @@ class _AppsPageState extends State<AppsPage> {
           ),
         ),
         actions: [
-          IconButton(
-            onPressed: () {
-              setState(() => isGridView = !isGridView);
-            },
-            icon: Icon(
-              isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded,
-              color: AppTheme.textPrimary,
+          if (apps.isNotEmpty)
+            IconButton(
+              onPressed: () {
+                setState(() => isGridView = !isGridView);
+              },
+              icon: Icon(
+                isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded,
+                color: AppTheme.textPrimary,
+              ),
             ),
-          ),
           const SizedBox(width: 8),
         ],
       ),
@@ -125,7 +133,7 @@ class _AppsPageState extends State<AppsPage> {
             )
           : RefreshIndicator(
               color: AppTheme.primary,
-              onRefresh: () => _loadApps(syncFirst: true),
+              onRefresh: () => _loadApps(syncFirst: true, forceRefresh: true),
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
                 children: [
@@ -136,12 +144,32 @@ class _AppsPageState extends State<AppsPage> {
                     _buildApiLinkedCard(),
                     const SizedBox(height: 20),
                   ],
-                  if (apps.isEmpty)
-                    const EmptyAppsState()
-                  else
-                    isGridView
-                        ? _buildGrid()
-                        : _buildList(),
+                  if (apps.isEmpty) ...[
+                    const EmptyAppsState(),
+                    const SizedBox(height: 18),
+                    if (apiLinked)
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: _openAddApp,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 52),
+                            side: BorderSide(color: AppTheme.border),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                          ),
+                          child: const Text(
+                            'Add Your First App',
+                            style: TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ] else
+                    isGridView ? _buildGrid() : _buildList(),
                 ],
               ),
             ),

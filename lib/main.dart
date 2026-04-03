@@ -1,50 +1,47 @@
-import 'dart:async';
-import 'dart:ui';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'app.dart';
-import 'core/notifications/notification_service.dart';
+import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.presentError(details);
-    debugPrint('FLUTTER ERROR: ${details.exceptionAsString()}');
-    debugPrintStack(stackTrace: details.stack);
-  };
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
 
-  PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('UNCAUGHT ERROR: $error');
-    debugPrintStack(stackTrace: stack);
-    return true;
-  };
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
 
-  await _safeStartup();
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
+
+  /// ✅ ONLY INIT FIREBASE IF NOT WEB
+  if (!kIsWeb) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+
+  /// ✅ SUPABASE ALWAYS SAFE
+  await Supabase.initialize(
+    url: 'https://kmjyjmpqcmgedtvzxyzul.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtteWptcHFjbWdlZHR2enh5enVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5Njg0MDMsImV4cCI6MjA5MDU0NDQwM30.18KrTjsoyNa2cxblkvNG4qN3LND78XA4km6ODHz44TU',
+  );
 
   runApp(const DevDatapointApp());
-}
-
-Future<void> _safeStartup() async {
-  try {
-    await Supabase.initialize(
-      url: 'https://kmjyjmpqcmgedtvzxyzul.supabase.co',
-      anonKey: 'sb_publishable_J8dUPRGsglH3lWjl5C8PmA_MZ4XS8KX',
-    );
-    debugPrint('Supabase initialised');
-  } catch (e, st) {
-    debugPrint('Supabase init failed: $e');
-    debugPrintStack(stackTrace: st);
-  }
-
-  try {
-    await NotificationService.init();
-    debugPrint('Notification service initialised');
-  } catch (e, st) {
-    debugPrint('Notification init failed: $e');
-    debugPrintStack(stackTrace: st);
-  }
 }

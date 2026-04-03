@@ -15,13 +15,17 @@ class ProPage extends StatefulWidget {
   State<ProPage> createState() => _ProPageState();
 }
 
-class _ProPageState extends State<ProPage> {
+class _ProPageState extends State<ProPage>
+    with AutomaticKeepAliveClientMixin {
   int selectedIndex = 2;
   bool isLoadingStore = true;
   bool isPurchasing = false;
   bool hasPro = false;
   String? activeProductId;
   List<ProductDetails> storeProducts = [];
+
+  @override
+  bool get wantKeepAlive => true;
 
   final List<Map<String, dynamic>> paidFeatures = const [
     {
@@ -189,7 +193,7 @@ class _ProPageState extends State<ProPage> {
 
   Future<void> _buyPlan(Map<String, dynamic> plan) async {
     final productId = plan['productId'] as String?;
-    if (productId == null) return;
+    if (productId == null || isPurchasing) return;
 
     if (!IAPService.isSupportedPlatform) {
       _showMessage(
@@ -226,6 +230,8 @@ class _ProPageState extends State<ProPage> {
       return;
     }
 
+    if (isPurchasing) return;
+
     setState(() => isPurchasing = true);
 
     try {
@@ -256,129 +262,121 @@ class _ProPageState extends State<ProPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 130),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildTopBar(context),
-              const SizedBox(height: 20),
-              _buildPremiumHero(),
-              const SizedBox(height: 26),
-
-              const Text(
-                'Choose Your Plan',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
+          children: [
+            _buildTopBar(context),
+            const SizedBox(height: 20),
+            _buildPremiumHero(),
+            const SizedBox(height: 26),
+            const Text(
+              'Choose Your Plan',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'All paid plans unlock the exact same Pro features. Choose the payment style that suits you best.',
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 14,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (!IAPService.isSupportedPlatform)
+              Container(
+                margin: const EdgeInsets.only(bottom: 18),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: const Text(
+                  'Web mode: UI testing only. Purchases and restores only work on iPhone/TestFlight.',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'All paid plans unlock the exact same Pro features. Choose the payment style that suits you best.',
+            ...List.generate(plans.length, (index) {
+              final plan = plans[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 18),
+                child: PricingCard(
+                  title: plan['title'],
+                  price: _priceForPlan(plan),
+                  subtitle: _isCurrentPlan(plan)
+                      ? 'Current active plan'
+                      : plan['subtitle'],
+                  buttonText: plan['button'],
+                  selected: selectedIndex == index,
+                  highlight: plan['highlight'] == true,
+                  isCurrent: _isCurrentPlan(plan),
+                  isLoading: isLoadingStore && index != 0,
+                  isPurchasing: isPurchasing,
+                  badge: plan['badge'],
+                  savingsText: plan['savingsText'],
+                  features:
+                      (plan['features'] as List).cast<Map<String, dynamic>>(),
+                  onTap: () => setState(() => selectedIndex = index),
+                  onUpgrade: () => _buyPlan(plan),
+                  onLearnMore: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ProFeaturesPage(),
+                      ),
+                    );
+                  },
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 54),
+                  side: BorderSide(color: AppTheme.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                onPressed: isPurchasing ? null : _restore,
+                child: Text(
+                  isPurchasing ? 'Please wait...' : 'Restore Purchases',
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Center(
+              child: Text(
+                'Business plan support can be added later for teams, more apps and collaboration.',
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 14,
+                  color: AppTheme.textMuted,
+                  fontSize: 12.5,
                   height: 1.45,
                 ),
               ),
-              const SizedBox(height: 14),
-
-              if (!IAPService.isSupportedPlatform)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 18),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppTheme.border),
-                  ),
-                  child: const Text(
-                    'Web mode: UI testing only. Purchases and restores only work on iPhone/TestFlight.',
-                    style: TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 13,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-
-              ...List.generate(plans.length, (index) {
-                final plan = plans[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 18),
-                  child: PricingCard(
-                    title: plan['title'],
-                    price: _priceForPlan(plan),
-                    subtitle: _isCurrentPlan(plan)
-                        ? 'Current active plan'
-                        : plan['subtitle'],
-                    buttonText: plan['button'],
-                    selected: selectedIndex == index,
-                    highlight: plan['highlight'] == true,
-                    isCurrent: _isCurrentPlan(plan),
-                    isLoading: isLoadingStore && index != 0,
-                    isPurchasing: isPurchasing,
-                    badge: plan['badge'],
-                    savingsText: plan['savingsText'],
-                    features:
-                        (plan['features'] as List).cast<Map<String, dynamic>>(),
-                    onTap: () => setState(() => selectedIndex = index),
-                    onUpgrade: () => _buyPlan(plan),
-                    onLearnMore: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ProFeaturesPage(),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              }),
-
-              const SizedBox(height: 8),
-
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 54),
-                    side: BorderSide(color: AppTheme.border),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  onPressed: isPurchasing ? null : _restore,
-                  child: Text(
-                    isPurchasing ? 'Please wait...' : 'Restore Purchases',
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 18),
-
-              Center(
-                child: Text(
-                  'Business plan support can be added later for teams, more apps and collaboration.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 12.5,
-                    height: 1.45,
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -452,32 +450,17 @@ class _ProPageState extends State<ProPage> {
           end: Alignment.bottomRight,
         ),
         border: Border.all(
-          color: Color(0xFFFFD76A),
-          width: 1.2,
+          color: const Color(0xFFFFD76A),
+          width: 1.0,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFFFD76A).withValues(alpha: 0.12),
-            blurRadius: 28,
-            spreadRadius: 1,
-            offset: const Offset(0, 10),
-          ),
-        ],
       ),
       child: Column(
         children: [
           Container(
-            width: 108,
-            height: 108,
+            width: 104,
+            height: 104,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFFFD76A).withValues(alpha: 0.18),
-                  blurRadius: 26,
-                  spreadRadius: 2,
-                ),
-              ],
+              borderRadius: BorderRadius.circular(26),
               image: const DecorationImage(
                 image: AssetImage('assets/images/pro_logo_gold.png'),
                 fit: BoxFit.cover,

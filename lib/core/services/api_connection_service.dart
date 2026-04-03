@@ -12,6 +12,10 @@ class ApiConnectionService {
   static const String _linkedAtKey = 'api_linked_at';
   static const String _appsKey = 'api_saved_apps';
 
+  static List<Map<String, String>>? _appsMemoryCache;
+  static Map<String, dynamic>? _totalsMemoryCache;
+  static bool _hasFetchedBackendAppsThisSession = false;
+
   static Future<bool> isLinked() async {
     final prefs = await SharedPreferences.getInstance();
     final issuerId = prefs.getString(_issuerIdKey)?.trim() ?? '';
@@ -54,49 +58,74 @@ class ApiConnectionService {
       privateKey: normalisedPrivateKey,
       vendorNumber: vendorNumber.trim(),
       isPro: isPro,
-    );
+    ).timeout(const Duration(seconds: 12));
   }
 
   static Future<void> saveApps(List<Map<String, String>> apps) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_appsKey, jsonEncode(apps));
-    await BackendSyncService.uploadApps(apps);
+
+    _appsMemoryCache = List<Map<String, String>>.from(apps);
+    _totalsMemoryCache = null;
+
+    await BackendSyncService.uploadApps(apps).timeout(
+      const Duration(seconds: 12),
+    );
   }
 
-  static Future<List<Map<String, String>>> getSavedApps() async {
-    try {
-      final backendApps = await BackendSyncService.fetchAppsFromBackend();
-      if (backendApps.isNotEmpty) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_appsKey, jsonEncode(backendApps));
-        return backendApps;
-      }
-    } catch (_) {}
+  static Future<List<Map<String, String>>> getSavedApps({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _appsMemoryCache != null) {
+      return _appsMemoryCache!;
+    }
 
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_appsKey);
-    if (raw == null || raw.trim().isEmpty) return [];
 
-    try {
-      final decoded = jsonDecode(raw) as List<dynamic>;
-      return decoded
-          .map(
-            (item) => {
-              'name': (item['name'] ?? '').toString(),
-              'iconUrl': (item['iconUrl'] ?? '').toString(),
-              'appStoreId': (item['appStoreId'] ?? '').toString(),
-              'bundleId': (item['bundleId'] ?? '').toString(),
-              'downloads': (item['downloads'] ?? '0').toString(),
-              'impressions': (item['impressions'] ?? '0').toString(),
-              'avgPlayTime': (item['avgPlayTime'] ?? '0').toString(),
-              'sessions': (item['sessions'] ?? '0').toString(),
-            },
-          )
-          .where((app) => (app['name'] ?? '').trim().isNotEmpty)
-          .toList();
-    } catch (_) {
-      return [];
+    if (!forceRefresh) {
+      final raw = prefs.getString(_appsKey);
+      if (raw != null && raw.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(raw) as List<dynamic>;
+          final localApps = decoded
+              .map(
+                (item) => {
+                  'name': (item['name'] ?? '').toString(),
+                  'iconUrl': (item['iconUrl'] ?? '').toString(),
+                  'appStoreId': (item['appStoreId'] ?? '').toString(),
+                  'bundleId': (item['bundleId'] ?? '').toString(),
+                  'downloads': (item['downloads'] ?? '0').toString(),
+                  'impressions': (item['impressions'] ?? '0').toString(),
+                  'avgPlayTime': (item['avgPlayTime'] ?? '0').toString(),
+                  'sessions': (item['sessions'] ?? '0').toString(),
+                },
+              )
+              .where((app) => (app['name'] ?? '').trim().isNotEmpty)
+              .toList();
+
+          _appsMemoryCache = localApps;
+          return localApps;
+        } catch (_) {}
+      }
     }
+
+    if (!_hasFetchedBackendAppsThisSession || forceRefresh) {
+      try {
+        final backendApps = await BackendSyncService.fetchAppsFromBackend()
+            .timeout(const Duration(seconds: 12));
+
+        if (backendApps.isNotEmpty || forceRefresh) {
+          await prefs.setString(_appsKey, jsonEncode(backendApps));
+          _appsMemoryCache = backendApps;
+          _totalsMemoryCache = null;
+          _hasFetchedBackendAppsThisSession = true;
+          return backendApps;
+        }
+      } catch (_) {}
+    }
+
+    _hasFetchedBackendAppsThisSession = true;
+    return _appsMemoryCache ?? [];
   }
 
   static Future<void> addApp(Map<String, String> app) async {
@@ -121,6 +150,10 @@ class ApiConnectionService {
     await prefs.remove(_vendorNumberKey);
     await prefs.remove(_linkedAtKey);
     await prefs.remove(_appsKey);
+
+    _appsMemoryCache = null;
+    _totalsMemoryCache = null;
+    _hasFetchedBackendAppsThisSession = false;
   }
 
   static Future<bool> isProUser() async {
@@ -143,8 +176,14 @@ class ApiConnectionService {
     return apps.length < limit;
   }
 
-  static Future<Map<String, dynamic>> getDashboardTotals() async {
-    final apps = await getSavedApps();
+  static Future<Map<String, dynamic>> getDashboardTotals({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _totalsMemoryCache != null) {
+      return _totalsMemoryCache!;
+    }
+
+    final apps = await getSavedApps(forceRefresh: forceRefresh);
 
     int totalDownloads = 0;
     int totalImpressions = 0;
@@ -171,17 +210,24 @@ class ApiConnectionService {
         ? 0.0
         : weightedPlayTimeSum / totalSessions;
 
-    return {
+    _totalsMemoryCache = {
       'linkedAppsCount': apps.length,
       'downloads': totalDownloads,
       'impressions': totalImpressions,
       'conversionRate': conversionRate,
       'averagePlayTime': averagePlayTime,
     };
+
+    return _totalsMemoryCache!;
   }
 
   static Future<void> syncNow() async {
-    await BackendSyncService.syncNowFromBackend(force: true);
+    await BackendSyncService.syncNowFromBackend(force: true)
+        .timeout(const Duration(seconds: 20));
+
+    _appsMemoryCache = null;
+    _totalsMemoryCache = null;
+    _hasFetchedBackendAppsThisSession = false;
   }
 
   static String _normalisePrivateKey(String value) {
