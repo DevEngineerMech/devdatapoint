@@ -64,5 +64,14 @@
 
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DevDatapoint needs access to your photo library so you can upload screenshots and app-related images.</string>
+
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>DevDatapoint may save exported images or app-related files to your photo library.</string>
+
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>DevDatapoint needs access to files so you can import screenshots, CSVs, and app-related documents.</string>
 </dict>
 </plist>
