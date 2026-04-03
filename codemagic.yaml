@@ -6,51 +6,36 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
-      cocoapods: default
 
       ios_signing:
         distribution_type: app_store
         bundle_identifier: app.rork.k1oi3mhgah0fgszldnbv8
 
-      vars:
-        BUNDLE_ID: "app.rork.k1oi3mhgah0fgszldnbv8"
-
     scripts:
       - name: Get Flutter packages
         script: |
+          flutter clean
           flutter pub get
-
-      - name: Force correct iOS bundle IDs
-        script: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("ios/Runner.xcodeproj/project.pbxproj")
-          s = p.read_text()
-          s = s.replace("PRODUCT_BUNDLE_IDENTIFIER = com.example.devdatapoint;", "PRODUCT_BUNDLE_IDENTIFIER = app.rork.k1oi3mhgah0fgszldnbv8;")
-          s = s.replace("PRODUCT_BUNDLE_IDENTIFIER = com.example.devdatapoint.RunnerTests;", "PRODUCT_BUNDLE_IDENTIFIER = app.rork.k1oi3mhgah0fgszldnbv8.RunnerTests;")
-          p.write_text(s)
-          PY
 
       - name: Install CocoaPods
         script: |
           cd ios
-          pod deintegrate
-          rm -rf Pods Podfile.lock
           pod repo update
           pod install
           cd ..
 
-      - name: Apply provisioning profiles
-        script: |
-          xcode-project use-profiles
-
       - name: Build signed IPA
         script: |
-          xcode-project build-ipa \
-            --workspace ios/Runner.xcworkspace \
-            --scheme Runner
+          flutter build ipa --release
 
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - flutter_drive.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
