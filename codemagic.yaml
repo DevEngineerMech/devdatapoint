@@ -3,6 +3,9 @@ workflows:
     name: iOS Workflow
     max_build_duration: 60
 
+    integrations:
+      app_store_connect: Codemagic
+
     environment:
       flutter: stable
       xcode: latest
@@ -10,9 +13,6 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: app.rork.k1oi3mhgah0fgszldnbv8
-
-    integrations:
-      app_store_connect: Codemagic
 
     scripts:
       - name: Get Flutter packages
@@ -40,3 +40,5 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
