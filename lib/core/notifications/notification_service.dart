@@ -1,50 +1,29 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
-import 'package:devdatapoint/core/services/backend_sync_service.dart';
-
 class NotificationService {
-  static bool _initialized = false;
+  static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
 
-  static Future<void> initialize() async {
-    if (_initialized) return;
-    _initialized = true;
-
-    final messaging = FirebaseMessaging.instance;
-
-    final settings = await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-
-    debugPrint('Notification permission: ${settings.authorizationStatus}');
-
+  static Future<void> init() async {
     try {
-      final token = await messaging.getToken();
-      if (token != null && token.trim().isNotEmpty) {
-        debugPrint('FCM Token: $token');
-        await BackendSyncService.savePushToken(token);
-      }
+      await _messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      final token = await _messaging.getToken();
+      debugPrint('FCM Token: $token');
+
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        debugPrint('Foreground notification received: ${message.notification?.title}');
+      });
+
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        debugPrint('Notification opened app: ${message.notification?.title}');
+      });
     } catch (e) {
-      debugPrint('Failed to get push token: $e');
+      debugPrint('Notification init error: $e');
     }
-
-    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-      try {
-        await BackendSyncService.savePushToken(newToken);
-      } catch (e) {
-        debugPrint('Failed to refresh push token: $e');
-      }
-    });
-
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('Foreground notification: ${message.notification?.title}');
-    });
-
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      debugPrint('Notification opened app: ${message.notification?.title}');
-    });
   }
 }

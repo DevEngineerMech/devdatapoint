@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:devdatapoint/core/theme/app_theme.dart';
-import 'package:devdatapoint/features/shell/app_shell.dart';
+
+import 'features/shell/app_shell.dart';
 
 class DevDatapointApp extends StatelessWidget {
   const DevDatapointApp({super.key});
@@ -10,7 +10,12 @@ class DevDatapointApp extends StatelessWidget {
     return MaterialApp(
       title: 'DevDatapoint',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.theme,
+      themeMode: ThemeMode.dark,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0E1117),
+        useMaterial3: true,
+      ),
       home: const AppShell(),
     );
   }
